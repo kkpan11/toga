@@ -1,39 +1,53 @@
-from abc import ABC
 from pathlib import Path
 
-from .libs import Gtk
+import toga
+
+from .libs import GTK_VERSION, Gtk
 
 
-class BaseDialog(ABC):
-    def __init__(self, interface):
-        self.interface = interface
-        self.interface._impl = self
+class BaseDialog:
+    def show(self, host_window, future):
+        if GTK_VERSION < (4, 0, 0):  # pragma: no-cover-if-gtk4
+            self.future = future
+
+            # If this is a modal dialog, set the window as transient to the host window.
+            if host_window:
+                self.native.set_transient_for(host_window._impl.native)
+            else:
+                self.native.set_transient_for(None)
+
+            # Show the dialog.
+            self.native.show()
+        else:  # pragma: no-cover-if-gtk3
+            self.interface.factory.not_implemented("BaseDialog.show()")
 
 
 class MessageDialog(BaseDialog):
     def __init__(
         self,
-        interface,
         title,
         message_type,
         buttons,
         success_result=None,
         **kwargs,
     ):
-        super().__init__(interface=interface)
-        self.success_result = success_result
+        super().__init__()
+        if GTK_VERSION < (4, 0, 0):  # pragma: no-cover-if-gtk4
+            self.success_result = success_result
 
-        self.native = Gtk.MessageDialog(
-            transient_for=interface.window._impl.native,
-            flags=0,
-            message_type=message_type,
-            buttons=buttons,
-            text=title,
-        )
-        self.build_dialog(**kwargs)
+            self.native = Gtk.MessageDialog(
+                flags=0,
+                message_type=message_type,
+                buttons=buttons,
+                text=title,
+            )
+            self.native.set_modal(True)
+            self.build_dialog(**kwargs)
 
-        self.native.connect("response", self.gtk_response)
-        self.native.show()
+            self.native.connect("response", self.gtk_response)
+
+        else:  # pragma: no-cover-if-gtk3
+            toga.NotImplementedWarning("Dialog()")
 
     def build_dialog(self, message):
         self.native.format_secondary_text(message)
@@ -44,15 +58,14 @@ class MessageDialog(BaseDialog):
         else:
             result = None
 
-        self.interface.set_result(result)
+        self.future.set_result(result)
 
         self.native.destroy()
 
 
 class InfoDialog(MessageDialog):
-    def __init__(self, interface, title, message):
+    def __init__(self, title, message):
         super().__init__(
-            interface=interface,
             title=title,
             message=message,
             message_type=Gtk.MessageType.INFO,
@@ -61,9 +74,8 @@ class InfoDialog(MessageDialog):
 
 
 class QuestionDialog(MessageDialog):
-    def __init__(self, interface, title, message):
+    def __init__(self, title, message):
         super().__init__(
-            interface=interface,
             title=title,
             message=message,
             message_type=Gtk.MessageType.QUESTION,
@@ -73,9 +85,8 @@ class QuestionDialog(MessageDialog):
 
 
 class ConfirmDialog(MessageDialog):
-    def __init__(self, interface, title, message):
+    def __init__(self, title, message):
         super().__init__(
-            interface=interface,
             title=title,
             message=message,
             message_type=Gtk.MessageType.WARNING,
@@ -85,9 +96,8 @@ class ConfirmDialog(MessageDialog):
 
 
 class ErrorDialog(MessageDialog):
-    def __init__(self, interface, title, message):
+    def __init__(self, title, message):
         super().__init__(
-            interface=interface,
             title=title,
             message=message,
             message_type=Gtk.MessageType.ERROR,
@@ -96,9 +106,8 @@ class ErrorDialog(MessageDialog):
 
 
 class StackTraceDialog(MessageDialog):
-    def __init__(self, interface, title, **kwargs):
+    def __init__(self, title, **kwargs):
         super().__init__(
-            interface=interface,
             title=title,
             message_type=Gtk.MessageType.ERROR,
             buttons=(
@@ -113,7 +122,8 @@ class StackTraceDialog(MessageDialog):
 
         self.native.format_secondary_text(message)
 
-        # Create a scrolling readonly text area, in monospace font, to contain the stack trace.
+        # Create a scrolling readonly text area, in monospace font,
+        # to contain the stack trace.
         buffer = Gtk.TextBuffer()
         buffer.set_text(content)
 
@@ -152,7 +162,6 @@ class StackTraceDialog(MessageDialog):
 class FileDialog(BaseDialog):
     def __init__(
         self,
-        interface,
         title,
         filename,
         initial_directory,
@@ -161,35 +170,37 @@ class FileDialog(BaseDialog):
         action,
         ok_icon,
     ):
-        super().__init__(interface=interface)
+        super().__init__()
 
         self.native = Gtk.FileChooserDialog(
-            transient_for=interface.window._impl.native,
             title=title,
             action=action,
         )
-        self.native.add_button(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL)
-        self.native.add_button(ok_icon, Gtk.ResponseType.OK)
+        if GTK_VERSION < (4, 0, 0):  # pragma: no-cover-if-gtk4
+            self.native.add_button("_Cancel", Gtk.ResponseType.CANCEL)
+            self.native.add_button("_OK", Gtk.ResponseType.OK)
+            self.native.set_modal(True)
 
-        if filename:
-            self.native.set_current_name(filename)
+            if filename:
+                self.native.set_current_name(filename)
 
-        if initial_directory:
-            self.native.set_current_folder(str(initial_directory))
+            if initial_directory:
+                self.native.set_current_folder(str(initial_directory))
 
-        if file_types:
-            for file_type in file_types:
-                filter_filetype = Gtk.FileFilter()
-                filter_filetype.set_name("." + file_type + " files")
-                filter_filetype.add_pattern("*." + file_type)
-                self.native.add_filter(filter_filetype)
+            if file_types:
+                for file_type in file_types:
+                    filter_filetype = Gtk.FileFilter()
+                    filter_filetype.set_name("." + file_type + " files")
+                    filter_filetype.add_pattern("*." + file_type)
+                    self.native.add_filter(filter_filetype)
 
-        self.multiple_select = multiple_select
-        if self.multiple_select:
-            self.native.set_select_multiple(True)
+            self.multiple_select = multiple_select
+            if self.multiple_select:
+                self.native.set_select_multiple(True)
+        else:  # pragma: no cover-if-gtk3
+            pass
 
         self.native.connect("response", self.gtk_response)
-        self.native.show()
 
     # Provided as a stub that can be mocked in test conditions
     def selected_path(self):
@@ -208,7 +219,7 @@ class FileDialog(BaseDialog):
         else:
             result = None
 
-        self.interface.set_result(result)
+        self.future.set_result(result)
 
         self.native.destroy()
 
@@ -216,60 +227,61 @@ class FileDialog(BaseDialog):
 class SaveFileDialog(FileDialog):
     def __init__(
         self,
-        interface,
         title,
         filename,
         initial_directory,
         file_types=None,
     ):
+        save_icon = "_Save"
         super().__init__(
-            interface=interface,
             title=title,
             filename=filename,
             initial_directory=initial_directory,
             file_types=file_types,
             multiple_select=False,
             action=Gtk.FileChooserAction.SAVE,
-            ok_icon=Gtk.STOCK_SAVE,
+            ok_icon=save_icon,
         )
+        if GTK_VERSION < (4, 0, 0):  # pragma: no-cover-if-gtk4
+            self.native.set_do_overwrite_confirmation(True)
+        else:  # pragma: no-cover-if-gtk3
+            pass
 
 
 class OpenFileDialog(FileDialog):
     def __init__(
         self,
-        interface,
         title,
         initial_directory,
         file_types,
         multiple_select,
     ):
+        open_icon = "_OK"
         super().__init__(
-            interface=interface,
             title=title,
             filename=None,
             initial_directory=initial_directory,
             file_types=file_types,
             multiple_select=multiple_select,
             action=Gtk.FileChooserAction.OPEN,
-            ok_icon=Gtk.STOCK_OPEN,
+            ok_icon=open_icon,
         )
 
 
 class SelectFolderDialog(FileDialog):
     def __init__(
         self,
-        interface,
         title,
         initial_directory,
         multiple_select,
     ):
+        open_icon = "_Open"
         super().__init__(
-            interface=interface,
             title=title,
             filename=None,
             initial_directory=initial_directory,
             file_types=None,
             multiple_select=multiple_select,
             action=Gtk.FileChooserAction.SELECT_FOLDER,
-            ok_icon=Gtk.STOCK_OPEN,
+            ok_icon=open_icon,
         )

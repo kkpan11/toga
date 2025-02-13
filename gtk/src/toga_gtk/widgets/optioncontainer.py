@@ -1,5 +1,7 @@
+import asyncio
+
 from ..container import TogaContainer
-from ..libs import Gtk
+from ..libs import GTK_VERSION, Gtk
 from .base import Widget
 
 
@@ -8,21 +10,34 @@ class OptionContainer(Widget):
 
     def create(self):
         self.native = Gtk.Notebook()
-        self.native.connect("switch-page", self.gtk_on_switch_page)
+        if GTK_VERSION < (4, 0, 0):  # pragma: no-cover-if-gtk4
+            self.native.connect("switch-page", self.gtk_on_switch_page)
+        else:  # pragma: no-cover-if-gtk3
+            pass
         self.sub_containers = []
 
     def gtk_on_switch_page(self, widget, page, page_num):
-        self.interface.on_select()
+        # Inside the switch-page event handler, the page_num argument gives the
+        # correct value for the page that has just been selected, but
+        # self.native.current_page() does not. It won't return the correct value
+        # until the switch-page event has completed. Since `on_select()` will
+        # likely need to retrieve the current tab, we need to defer triggering
+        # on_select() until we know current_page will return the correct value.
+        # We do this by deferring the callback to execute on the event loop.
+        asyncio.get_event_loop().call_soon(self.interface.on_select)
 
     def add_option(self, index, text, widget, icon):
-        sub_container = TogaContainer()
-        sub_container.content = widget
+        if GTK_VERSION < (4, 0, 0):  # pragma: no-cover-if-gtk4
+            sub_container = TogaContainer()
+            sub_container.content = widget
 
-        self.sub_containers.insert(index, sub_container)
-        self.native.insert_page(sub_container, Gtk.Label(label=text), index)
-        # Tabs aren't visible by default;
-        # tell the notebook to show all content.
-        self.native.show_all()
+            self.sub_containers.insert(index, sub_container)
+            self.native.insert_page(sub_container, Gtk.Label(label=text), index)
+            # Tabs aren't visible by default;
+            # tell the notebook to show all content.
+            self.native.show_all()
+        else:  # pragma: no-cover-if-gtk3
+            pass
 
     def remove_option(self, index):
         self.native.remove_page(index)
@@ -30,7 +45,10 @@ class OptionContainer(Widget):
         del self.sub_containers[index]
 
     def set_option_enabled(self, index, enabled):
-        self.sub_containers[index].set_visible(enabled)
+        if GTK_VERSION < (4, 0, 0):  # pragma: no-cover-if-gtk4
+            self.sub_containers[index].set_visible(enabled)
+        else:  # pragma: no-cover-if-gtk3
+            pass
 
     def is_option_enabled(self, index):
         return self.sub_containers[index].get_visible()

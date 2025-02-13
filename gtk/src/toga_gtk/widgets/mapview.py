@@ -4,7 +4,7 @@ from travertino.size import at_least
 
 from toga.types import LatLng
 
-from ..libs import Gtk, WebKit2
+from ..libs import GTK_VERSION, Gtk, WebKit2
 from .base import Widget
 
 MAPVIEW_HTML_CONTENT = """<!DOCTYPE html>
@@ -37,13 +37,13 @@ MAPVIEW_HTML_CONTENT = """<!DOCTYPE html>
         const map = L.map("map");
         const pins = {};
         const tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            maxZoom: 19,
+            maxZoom: 20,
             attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         }).addTo(map);
     </script>
 </body>
 </html>
-"""
+"""  # noqa: E501
 
 
 def pin_id(pin):
@@ -68,10 +68,15 @@ class MapView(Widget):
     SUPPORTS_ON_SELECT = False
 
     def create(self):
+        if GTK_VERSION >= (4, 0, 0):  # pragma: no-cover-if-gtk3
+            raise RuntimeError("MapView isn't supported on GTK4 (yet!)")
+
         if WebKit2 is None:  # pragma: no cover
             raise RuntimeError(
-                "Unable to import WebKit2. Ensure that the system package "
-                "providing Webkit2 and its GTK bindings have been installed."
+                "Unable to import WebKit2. Ensure that the system package providing "
+                "WebKit2 and its GTK bindings have been installed. See "
+                "https://toga.readthedocs.io/en/stable/reference/api/widgets/mapview.html#system-requirements "  # noqa: E501
+                "for details."
             )
 
         self.native = WebKit2.WebView()
@@ -111,8 +116,8 @@ class MapView(Widget):
         # A callback that will update the future when the Javascript is
         # complete.
         def js_finished(webview, result, *user_data):
-            """If `evaluate_javascript_finish` from GTK returns a result, unmarshal it, and
-            call back with the result."""
+            """If `evaluate_javascript_finish` from GTK returns a result, unmarshal it,
+            and call back with the result."""
             try:
                 value = webview.evaluate_javascript_finish(result)
                 if value.is_number():

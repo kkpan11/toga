@@ -3,7 +3,7 @@ from threading import Event
 
 import pytest
 
-from toga_gtk.libs import Gdk, Gtk
+from toga_gtk.libs import GTK_VERSION, Gdk, Gtk
 
 from ..fonts import FontMixin
 from ..probe import BaseProbe
@@ -22,6 +22,9 @@ class SimpleProbe(BaseProbe, FontMixin):
         # Set the target for keypress events
         self._keypress_target = self.native
 
+        if GTK_VERSION >= (4, 0, 0):
+            pytest.skip("GTK4 only has minimal container support")
+
         # Ensure that the theme isn't using animations for the widget.
         settings = Gtk.Settings.get_for_screen(self.native.get_screen())
         settings.set_property("gtk-enable-animations", False)
@@ -38,8 +41,8 @@ class SimpleProbe(BaseProbe, FontMixin):
         assert self.widget._impl.container is None
         assert self.native.get_parent() is None
 
-    def assert_alignment(self, expected):
-        assert self.alignment == expected
+    def assert_text_align(self, expected):
+        assert self.text_align == expected
 
     def repaint_needed(self):
         return self.impl.container.needs_redraw or super().repaint_needed()
@@ -166,7 +169,7 @@ class SimpleProbe(BaseProbe, FontMixin):
         self._keypress_target.disconnect(handler_id)
 
         # GTK has an intermittent failure because on_change handler
-        # caused by typing a character doesn't fully propegate. A
+        # caused by typing a character doesn't fully propagate. A
         # short delay fixes this.
         await asyncio.sleep(0.04)
 

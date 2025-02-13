@@ -1,8 +1,7 @@
-import os
-
 from toga.screens import Screen as ScreenInterface
+from toga.types import Position, Size
 
-from .libs import Gdk
+from .libs import GTK_VERSION, IS_WAYLAND, Gdk
 
 
 class Screen:
@@ -21,19 +20,25 @@ class Screen:
     def get_name(self):
         return self.native.get_model()
 
-    def get_origin(self):
-        geometry = self.native.get_geometry()
-        return geometry.x, geometry.y
+    def get_origin(self) -> Position:
+        if GTK_VERSION < (4, 0, 0):  # pragma: no-cover-if-gtk4
+            geometry = self.native.get_geometry()
+            return Position(geometry.x, geometry.y)
+        else:  # pragma: no-cover-if-gtk3
+            self.interface.factory.not_implemented(
+                "Screen get_origin is not possible with GTK4"
+            )
+            return Position(0, 0)
 
-    def get_size(self):
+    def get_size(self) -> Size:
         geometry = self.native.get_geometry()
-        return geometry.width, geometry.height
+        return Size(geometry.width, geometry.height)
 
     def get_image_data(self):
-        if "WAYLAND_DISPLAY" in os.environ:
+        if IS_WAYLAND:  # pragma: no cover
             # Not implemented on wayland due to wayland security policies.
             self.interface.factory.not_implemented("Screen.get_image_data() on Wayland")
-        else:
+        else:  # pragma: no-cover-if-linux-wayland
             # Only works for Xorg
             display = self.native.get_display()
             screen = display.get_default_screen()

@@ -1,7 +1,9 @@
 import asyncio
 import html
 
-from toga_gtk.libs import GLib, Gtk
+import pytest
+
+from toga_gtk.libs import GTK_VERSION, GLib, Gtk
 
 from .base import SimpleProbe
 
@@ -17,6 +19,9 @@ class DetailedListProbe(SimpleProbe):
         self.native_vadj = widget._impl.native_vadj
         assert isinstance(self.native_detailedlist, Gtk.ListBox)
 
+        if GTK_VERSION >= (4, 0, 0):
+            pytest.skip("GTK4 doesn't support a detailed list yet")
+
     @property
     def row_count(self):
         return len(self.impl.store)
@@ -30,7 +35,7 @@ class DetailedListProbe(SimpleProbe):
         )
 
         if icon:
-            assert row.icon.get_pixbuf() == icon._impl.native_32
+            assert row.icon.get_pixbuf() == icon._impl.native(32)
         else:
             assert row.icon is None
 

@@ -1,11 +1,12 @@
 from travertino.size import at_least
 
 from ..libs import (
+    GTK_VERSION,
     Gtk,
     get_background_color_css,
     get_color_css,
     get_font_css,
-    gtk_alignment,
+    gtk_text_align,
 )
 from .base import Widget
 
@@ -34,15 +35,18 @@ class MultilineTextInput(Widget):
 
         self.native_textview = Gtk.TextView()
         self.native_textview.set_name(f"toga-{self.interface.id}-textview")
-        self.native_textview.get_style_context().add_class("toga")
+        if GTK_VERSION < (4, 0, 0):  # pragma: no-cover-if-gtk4
+            self.native_textview.get_style_context().add_class("toga")
 
-        self.native_textview.set_buffer(self.placeholder)
-        self.native_textview.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        self.native_textview.connect("focus-in-event", self.gtk_on_focus_in)
-        self.native_textview.connect("focus-out-event", self.gtk_on_focus_out)
-        self.native_textview.connect("key-press-event", self.gtk_on_key_press)
+            self.native_textview.set_buffer(self.placeholder)
+            self.native_textview.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+            self.native_textview.connect("focus-in-event", self.gtk_on_focus_in)
+            self.native_textview.connect("focus-out-event", self.gtk_on_focus_out)
+            self.native_textview.connect("key-press-event", self.gtk_on_key_press)
 
-        self.native.add(self.native_textview)
+            self.native.add(self.native_textview)
+        else:  # pragma: no-cover-if-gtk3
+            pass
 
     def set_color(self, color):
         self.apply_css(
@@ -113,8 +117,8 @@ class MultilineTextInput(Widget):
             self.placeholder.get_end_iter(),
         )  # make the placeholder text gray.
 
-    def set_alignment(self, value):
-        _, justification = gtk_alignment(value)
+    def set_text_align(self, value):
+        _, justification = gtk_text_align(value)
         self.native_textview.set_justification(justification)
 
     def focus(self):
@@ -122,7 +126,7 @@ class MultilineTextInput(Widget):
 
     def gtk_on_changed(self, *args):
         # buffer.set_text("foo") generates 2 change signals; one clearing the
-        # buffer, and one setting the new value. We only propegate the second
+        # buffer, and one setting the new value. We only propagate the second
         # signal. To ensure that we also get a signal when the value is
         # deliberately cleared, we add an explicit signal handler to set_value()
         # for the empty value case.
@@ -146,8 +150,11 @@ class MultilineTextInput(Widget):
         return False
 
     def rehint(self):
-        self.interface.intrinsic.width = at_least(self.interface._MIN_WIDTH)
-        self.interface.intrinsic.height = at_least(self.interface._MIN_HEIGHT)
+        if GTK_VERSION < (4, 0, 0):  # pragma: no-cover-if-gtk4
+            self.interface.intrinsic.width = at_least(self.interface._MIN_WIDTH)
+            self.interface.intrinsic.height = at_least(self.interface._MIN_HEIGHT)
+        else:  # pragma: no-cover-if-gtk3
+            pass
 
     def scroll_to_bottom(self):
         self.buffer.place_cursor(self.buffer.get_end_iter())

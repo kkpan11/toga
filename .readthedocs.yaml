@@ -7,9 +7,8 @@ version: 2
 build:
   os: ubuntu-22.04
   tools:
-    # On Python 3.12, pip fails with AttributeError: module 'pkgutil' has no attribute
-    # 'ImpImporter', probably because readthedocs provides an old version of pip.
-    python: "3.11"
+    # Docs are always built on Python 3.12. See also the tox config and contribution docs.
+    python: "3.12"
   jobs:
     post_checkout:
       # RTD defaults to a depth of 50 but Toga versioning may require
@@ -28,9 +27,13 @@ sphinx:
 formats:
    - pdf
 
-# Install extras for build - dev is needed to run tox
+# Install extras for build. Order is significant; each entry is a separate call to
+# `pip`, and we need Travertino to exist before core is installed. core[dev] is needed
+# to run `tox -e docs-lint` as a pre-build step.
 python:
   install:
+  - method: pip
+    path: travertino
   - method: pip
     path: core
     extra_requirements:

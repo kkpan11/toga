@@ -1,8 +1,9 @@
 from io import BytesIO
 
+import pytest
 from PIL import Image
 
-from toga_gtk.libs import Gdk, Gtk
+from toga_gtk.libs import GTK_VERSION, IS_WAYLAND, Gdk, Gtk
 
 from .base import SimpleProbe
 
@@ -10,8 +11,16 @@ from .base import SimpleProbe
 class CanvasProbe(SimpleProbe):
     native_class = Gtk.DrawingArea
 
+    if GTK_VERSION >= (4, 0, 0):
+        pytest.skip("GTK4 doesn't support a canvas yet")
+
     def reference_variant(self, reference):
-        if reference in {"write_text", "multiline_text"}:
+        if reference == "multiline_text":
+            if IS_WAYLAND:
+                return f"{reference}-gtk-wayland"
+            else:
+                return f"{reference}-gtk-x11"
+        elif reference == "write_text":
             return f"{reference}-gtk"
         else:
             return reference

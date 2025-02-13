@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from toga_gtk.libs import Gtk
+from toga_gtk.libs import GTK_VERSION, Gtk
 
 from .base import SimpleProbe
 
@@ -11,6 +11,9 @@ class TreeProbe(SimpleProbe):
     native_class = Gtk.ScrolledWindow
     supports_keyboard_shortcuts = False
     supports_widgets = False
+
+    if GTK_VERSION >= (4, 0, 0):
+        pytest.skip("GTK4 doesn't support trees yet")
 
     def __init__(self, widget):
         super().__init__(widget)
@@ -60,7 +63,7 @@ class TreeProbe(SimpleProbe):
             assert gtk_row[col * 2 + 2]
 
             if icon:
-                assert gtk_row[col * 2 + 1] == icon._impl.native_16
+                assert gtk_row[col * 2 + 1] == icon._impl.native(16)
             else:
                 assert gtk_row[col * 2 + 1] is None
 

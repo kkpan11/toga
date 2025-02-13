@@ -22,7 +22,6 @@ def native_decimal(value):
 
 
 class NumberInput(Widget):
-    _background_supports_alpha = False
 
     def create(self):
         self.native = WinForms.NumericUpDown()
@@ -63,7 +62,7 @@ class NumberInput(Widget):
         else:
             self.native.Value = native_decimal(value)
 
-    def set_alignment(self, value):
+    def set_text_align(self, value):
         self.native.TextAlign = HorizontalTextAlignment(value)
 
     def rehint(self):

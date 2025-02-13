@@ -15,19 +15,42 @@ from ..libs import (
 from .base import Widget
 
 
+def approx(a, b):
+    return abs(a - b) < 0.00001
+
+
 class TogaMapView(MKMapView):
     interface = objc_property(object, weak=True)
     impl = objc_property(object, weak=True)
 
     @objc_method
     def mapView_didSelectAnnotationView_(self, mapView, view) -> None:
-        pin = self.impl.pins[view.annotation]
-        self.interface.on_select(pin=pin)
+        # It's possible for this handler to be invoked *after* the interface/impl object
+        # has been destroyed. If the interface/impl doesn't exist there's no handler to
+        # invoke either, so ignore the edge case. This can't be reproduced reliably, so
+        # don't check coverage on the `is None` case.
+        if self.interface:  # pragma: no branch
+            pin = self.impl.pins[view.annotation]
+            self.interface.on_select(pin=pin)
 
     @objc_method
     def mapView_regionDidChangeAnimated_(self, mapView, animated: bool) -> None:
-        # Once an animation finishes, we know the future location has been reached.
-        self.impl.future_location = None
+        # Once an animation finishes, compare the currently viewable region with any
+        # future values. As with didSelectAnnotationView, it's possible to be invoked
+        # after the impl has been destroyed.
+        if self.impl:  # pragma: no branch
+            region = self.impl.native.region
+            if (
+                self.impl.future_location
+                and approx(region.center.latitude, self.impl.future_location.latitude)
+                and approx(region.center.longitude, self.impl.future_location.longitude)
+            ):
+                self.impl.future_location = None
+
+            if self.impl.future_delta and approx(
+                region.span.longitudeDelta, self.impl.future_delta
+            ):
+                self.impl.future_delta = None
 
 
 class MapView(Widget):
@@ -43,8 +66,11 @@ class MapView(Widget):
         # finished animating to the new location yet. Whenever we change location, store
         # the desired future location, so that any zoom changes that occur during
         # animation can use the desired *future* location as the center of the zoom
-        # window, rather than wherever the window is mid-pan.
+        # window, rather than wherever the window is mid-pan. Similarly, store the
+        # future span delta, so that the desired span can be applied rather than the
+        # current span.
         self.future_location = None
+        self.future_delta = None
 
         # Setting the zoom level also requires knowing the size of the rendered area.
         # We won't know this until layout happens at least once, so retain a backlog
@@ -88,10 +114,17 @@ class MapView(Widget):
     def set_location(self, position):
         if self.backlog is None:
             self.future_location = CLLocationCoordinate2D(*position)
-            self.native.setCenterCoordinate(
-                self.future_location,
-                animated=True,
+            delta = (
+                self.future_delta
+                if self.future_delta
+                else self.native.region.span.longitudeDelta
             )
+
+            region = MKCoordinateRegion(
+                self.future_location,
+                MKCoordinateSpan(0, delta),
+            )
+            self.native.setRegion(region, animated=True)
         else:
             self.backlog["location"] = position
 
@@ -105,18 +138,21 @@ class MapView(Widget):
 
     def set_zoom(self, zoom):
         if self.backlog is None:
-            # The zoom level indicates how many degrees of longitude will be displayed in a
-            # 256 pixel horizontal range. Determine how many degrees of longitude that is,
-            # and scale to the size of the visible horizontal space.
+            # The zoom level indicates how many degrees of longitude will be displayed
+            # in a 256 pixel horizontal range. Determine how many degrees of longitude
+            # that is, and scale to the size of the visible horizontal space.
 
             # The horizontal axis can't show more than 360 degrees of longitude, so clip
             # the range to that value. The OSM zoom level is based on 360 degrees of
             # longitude being split into 2**zoom sections.
-            delta = min(360.0, (360 * self.interface.layout.width) / (256 * 2**zoom))
+            self.future_delta = min(
+                360.0,
+                (360 * self.interface.layout.width) / (256 * 2**zoom),
+            )
 
             # If we're currently panning to a new location, use the desired *future*
-            # location as the center of the zoom region. Otherwise use the current center
-            # coordinate.
+            # location as the center of the zoom region. Otherwise use the current
+            # center coordinate.
             center = (
                 self.future_location
                 if self.future_location is not None
@@ -124,7 +160,7 @@ class MapView(Widget):
             )
             region = MKCoordinateRegion(
                 center,
-                MKCoordinateSpan(0, delta),
+                MKCoordinateSpan(0, self.future_delta),
             )
             self.native.setRegion(region, animated=True)
         else:
